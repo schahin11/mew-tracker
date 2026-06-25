@@ -31,7 +31,7 @@ function buyQuery(c) {
   const num = String(c.number || '').split('/')[0];
   return [c.name, c.set, (num && num !== '—') ? num : ''].filter(Boolean).join(' ');
 }
-const tcgUrl  = c => 'https://www.tcgplayer.com/search/pokemon/product?productLineName=pokemon&view=grid&q=' + encodeURIComponent(buyQuery(c));
+const tcgUrl  = c => 'https://www.tcgplayer.com/search/pokemon/product?productLineName=pokemon&view=grid&Condition=Near+Mint&q=' + encodeURIComponent(buyQuery(c));
 const ebayUrl = c => 'https://www.ebay.com/sch/i.html?_sacat=183454&LH_Complete=1&LH_Sold=1&_nkw=' + encodeURIComponent(buyQuery(c));
 
 function stats(col) {
