@@ -26,6 +26,14 @@ const money = n => '$' + Math.round(n).toLocaleString('en-US');
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const TIER = { 1: 'Bulk', 2: 'Mid', 3: 'Grail' };
 
+/* ---------- buy links (pre-searched per card) ---------- */
+function buyQuery(c) {
+  const num = String(c.number || '').split('/')[0];
+  return [c.name, c.set, (num && num !== '—') ? num : ''].filter(Boolean).join(' ');
+}
+const tcgUrl  = c => 'https://www.tcgplayer.com/search/pokemon/product?productLineName=pokemon&view=grid&q=' + encodeURIComponent(buyQuery(c));
+const ebayUrl = c => 'https://www.ebay.com/sch/i.html?_sacat=183454&LH_Complete=1&LH_Sold=1&_nkw=' + encodeURIComponent(buyQuery(c));
+
 function stats(col) {
   let o = 0, ov = 0, tv = 0;
   col.cards.forEach(c => { tv += c.price; if (owned.has(k(col.id, c.id))) { o++; ov += c.price; } });
@@ -147,6 +155,7 @@ function renderGrid(col) {
       <div class="art" data-holo><div class="holo-sheen"></div>${art}
         <span class="check">✓</span>
         <button class="zoom" data-zoom title="Zoom">⤢</button>
+        <a class="buy" data-ext href="${tcgUrl(c)}" target="_blank" rel="noopener" title="Find on TCGplayer">$</a>
       </div>
       <div class="card-meta">
         <span class="cn">${esc(c.name)}</span>
@@ -174,6 +183,7 @@ function wireControls(col) {
 /* ---------- toggle / zoom (delegated) ---------- */
 document.getElementById('app').addEventListener('click', e => {
   if (e.target.closest('.tile')) return;               // let tile links navigate
+  if (e.target.closest('[data-ext]')) return;          // let buy links open in new tab
   const zoom = e.target.closest('[data-zoom]');
   const card = e.target.closest('.card');
   if (!card || !activeCol) return;
@@ -228,6 +238,11 @@ function openLightbox(col, c) {
         <dt>Price conf.</dt><dd>${esc(c.confidence)}</dd>
       </dl>
       <button class="lb-toggle ${on ? 'on' : ''}" data-lb-toggle>${on ? '✓ In collection' : '+ Mark as owned'}</button>
+      <div class="lb-buy">
+        <span class="lb-buy-label">Find to buy</span>
+        <a class="lb-buy-btn tcg" href="${tcgUrl(c)}" target="_blank" rel="noopener">TCGplayer listings ↗</a>
+        <a class="lb-buy-btn ebay" href="${ebayUrl(c)}" target="_blank" rel="noopener">eBay sold comps ↗</a>
+      </div>
     </div>
   </div>`;
   lb.hidden = false; requestAnimationFrame(() => lb.classList.add('show'));

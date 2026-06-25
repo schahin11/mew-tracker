@@ -232,6 +232,15 @@ select.sort {
 }
 .card:hover .zoom { opacity: 1; }
 
+.buy {
+  position: absolute; top: 8px; right: 42px; z-index: 5; width: 28px; height: 28px; border-radius: 9px;
+  border: 1px solid var(--border-2); background: rgba(10,10,20,.6); color: var(--gold-2); cursor: pointer;
+  display: grid; place-items: center; font-size: 14px; font-weight: 800; text-decoration: none;
+  backdrop-filter: blur(6px); opacity: 0; transition: opacity .2s ease, color .15s ease, border-color .15s ease;
+}
+.card:hover .buy { opacity: 1; }
+.buy:hover { color: var(--gold); border-color: var(--gold); }
+
 .card-meta { padding: 9px 2px 0; }
 .card-meta .cn { display: block; font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
 .card-meta .cs { display: block; font-size: 11px; color: var(--muted); margin-top: 1px;
@@ -268,6 +277,14 @@ select.sort {
 }
 .lb-toggle.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1020; border-color: transparent; }
 
+.lb-buy { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.lb-buy-label { font-size: 11px; text-transform: uppercase; letter-spacing: .14em; color: var(--muted); }
+.lb-buy-btn { display: block; text-align: center; padding: 10px 14px; border-radius: 10px; font-size: 13.5px;
+  font-weight: 600; text-decoration: none; border: 1px solid var(--border-2); transition: filter .15s ease, transform .15s ease; }
+.lb-buy-btn.tcg  { background: rgba(70,130,255,.16); color: #b9d0ff; border-color: rgba(120,160,255,.35); }
+.lb-buy-btn.ebay { background: rgba(255,210,120,.12); color: var(--gold-2); border-color: rgba(236,196,106,.3); }
+.lb-buy-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
 footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 40px; line-height: 1.7; }
 footer .reset { color: var(--accent); cursor: pointer; text-decoration: underline; }
 
@@ -276,5 +293,6 @@ footer .reset { color: var(--accent); cursor: pointer; text-decoration: underlin
   .grid { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 14px; }
   .hero { padding: 60px 0 18px; }
   .lb-inner { flex-direction: column; gap: 18px; }
+  .zoom, .buy { opacity: .92; }
 }
 @media (prefers-reduced-motion: reduce) { .aurora span { animation: none; } [data-holo] { transition: none; } }
