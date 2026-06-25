@@ -15,6 +15,7 @@ Pure static site — **no build step.** HTML + CSS + vanilla JS.
 | `app.js` | logic — routing, dashboard, collection view, holo, lightbox |
 | `collections.js` | **the registry — defines each collection (tab)** |
 | `cards.js` | the Mew card data (used by the Mew collection) |
+| `deltas.js` | 30-day price-movement % per card (powers the ▲/▼ badge; optional) |
 | `img/` | locally-hosted card art for cards not in the public API |
 
 ## Adding a new collection (a new tab)

@@ -8,7 +8,7 @@ const OWNED_KEY = 'tcg-owned-v1';
 
 let owned = loadOwned();
 migrateOld();
-let filters = { q: '', tier: 'all', show: 'all', sort: 'asc' };
+let filters = { q: '', tier: 'all', show: 'all', sort: 'asc', rarity: 'all' };
 
 /* ---------- storage ---------- */
 function loadOwned() { try { return new Set(JSON.parse(localStorage.getItem(OWNED_KEY) || '[]')); } catch { return new Set(); } }
@@ -33,6 +33,35 @@ function buyQuery(c) {
 }
 const tcgUrl  = c => 'https://www.tcgplayer.com/search/pokemon/product?productLineName=pokemon&view=grid&Condition=Near+Mint&q=' + encodeURIComponent(buyQuery(c));
 const ebayUrl = c => 'https://www.ebay.com/sch/i.html?_sacat=183454&LH_Complete=1&LH_Sold=1&_nkw=' + encodeURIComponent(buyQuery(c));
+
+/* ---------- price movement (▲/▼ 30-day) ---------- */
+const deltaOf = c => { const d = (window.TCG_DELTAS || {})[c.id]; return typeof d === 'number' ? d : null; };
+function deltaBadge(c, inline) {
+  const d = deltaOf(c);
+  if (d === null || Math.abs(d) < 8 || c.price < 2) return '';
+  const up = d > 0, mag = Math.min(Math.abs(d), 99).toFixed(0);
+  return `<span class="delta ${up ? 'up' : 'down'}${inline ? ' inline' : ''}" title="≈${d > 0 ? '+' : ''}${d}% vs 30-day average">${up ? '▲' : '▼'}${mag}%</span>`;
+}
+
+/* ---------- backup ---------- */
+function exportOwned() {
+  const blob = new Blob([JSON.stringify([...owned])], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'tcg-vault-backup.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function importOwned(file) {
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const arr = JSON.parse(r.result);
+      if (!Array.isArray(arr)) throw 0;
+      arr.forEach(x => owned.add(x)); saveOwned(); render();
+      alert(`Imported ${arr.length} cards into your vault.`);
+    } catch { alert('That file is not a valid vault backup.'); }
+  };
+  r.readAsText(file);
+}
 
 function stats(col) {
   let o = 0, ov = 0, tv = 0;
@@ -90,17 +119,29 @@ function renderHome() {
       ${tiles}
       <div class="tile add"><div><div class="plus">+</div><div style="margin-top:6px;font-size:13px">add a collection in <code>collections.js</code></div></div></div>
     </div>
-    <footer>Progress saves automatically in this browser. &nbsp;·&nbsp; <span class="reset" id="reset">Reset everything</span></footer>
+    <footer>
+      Progress saves in this browser. &nbsp;·&nbsp;
+      <span class="lk" id="export">⭳ Export backup</span> &nbsp;·&nbsp;
+      <span class="lk" id="import">⭱ Import</span> &nbsp;·&nbsp;
+      <span class="reset" id="reset">Reset all</span>
+      <input type="file" id="importfile" accept="application/json" hidden>
+    </footer>
   </div>`;
 
   const reset = document.getElementById('reset');
   if (reset) reset.onclick = () => { if (confirm('Clear ALL checkmarks across every collection?')) { owned = new Set(); saveOwned(); render(); } };
+  const exp = document.getElementById('export'), imp = document.getElementById('import'), impf = document.getElementById('importfile');
+  if (exp) exp.onclick = exportOwned;
+  if (imp && impf) { imp.onclick = () => impf.click(); impf.onchange = () => { if (impf.files[0]) importOwned(impf.files[0]); }; }
 }
 
 /* ---------- collection ---------- */
 let activeCol = null;
 function renderCollection(col) {
   activeCol = col;
+  filters.rarity = 'all';
+  const rarities = [...new Set(col.cards.map(c => c.rarity).filter(Boolean))].sort();
+  const rarityOpts = ['all', ...rarities].map(r => `<option value="${esc(r)}">${r === 'all' ? 'All rarities' : esc(r)}</option>`).join('');
   document.getElementById('app').innerHTML = `<div class="wrap" style="--accent:${col.accent};--accent2:${col.accent2 || col.accent}">
     <div class="cv-head">
       <a class="back" href="#/" title="Back">←</a>
@@ -115,10 +156,16 @@ function renderCollection(col) {
       <input id="search" class="search" type="search" placeholder="Search set, card, year…" autocomplete="off">
       <div class="chips">${['all','1','2','3'].map(t => `<button class="chip" data-tier="${t}">${t==='all'?'All':TIER[t]}</button>`).join('')}</div>
       <div class="chips">${[['all','All'],['owned','Have'],['unowned','Need']].map(([v,l]) => `<button class="chip" data-show="${v}">${l}</button>`).join('')}</div>
-      <select id="sort" class="sort"><option value="asc">$ low → high</option><option value="desc">$ high → low</option></select>
+      <select id="rarity" class="sort">${rarityOpts}</select>
+      <select id="sort" class="sort">
+        <option value="asc">$ low → high</option>
+        <option value="desc">$ high → low</option>
+        <option value="num">Set number</option>
+        <option value="movers">Biggest movers</option>
+      </select>
     </div>
     <div id="grid" class="grid"></div>
-    <footer>Tap a card to mark it owned · tap <b>⤢</b> to zoom. &nbsp;·&nbsp; <span class="reset" id="reset">Reset ${esc(col.name)}</span></footer>
+    <footer>Tap a card to mark it owned · tap <b>⤢</b> to zoom · <span class="delta up inline">▲</span>/<span class="delta down inline">▼</span> = 30-day price move. &nbsp;·&nbsp; <span class="reset" id="reset">Reset ${esc(col.name)}</span></footer>
   </div>`;
 
   wireControls(col);
@@ -136,6 +183,7 @@ function renderStats(col) {
 function passes(col, c) {
   const f = filters, on = owned.has(k(col.id, c.id));
   if (f.tier !== 'all' && String(c.tier) !== f.tier) return false;
+  if (f.rarity && f.rarity !== 'all' && c.rarity !== f.rarity) return false;
   if (f.show === 'owned' && !on) return false;
   if (f.show === 'unowned' && on) return false;
   if (f.q && !`${c.name} ${c.variant} ${c.set} ${c.number} ${c.year} ${c.rarity}`.toLowerCase().includes(f.q.toLowerCase())) return false;
@@ -143,7 +191,13 @@ function passes(col, c) {
 }
 
 function renderGrid(col) {
-  const rows = col.cards.filter(c => passes(col, c)).sort((a, b) => filters.sort === 'desc' ? b.price - a.price : a.price - b.price);
+  const numOf = c => { const n = String(c.number).split('/')[0]; return /^\d+$/.test(n) ? +n : 99999; };
+  const s = filters.sort;
+  const rows = col.cards.filter(c => passes(col, c)).sort((a, b) => {
+    if (s === 'num') return numOf(a) - numOf(b);
+    if (s === 'movers') return Math.abs(deltaOf(b) || 0) - Math.abs(deltaOf(a) || 0);
+    return s === 'desc' ? b.price - a.price : a.price - b.price;
+  });
   const grid = document.getElementById('grid');
   if (!rows.length) { grid.innerHTML = `<div class="empty">No cards match that filter.</div>`; return; }
   grid.innerHTML = rows.map(c => {
@@ -156,6 +210,7 @@ function renderGrid(col) {
         <span class="check">✓</span>
         <button class="zoom" data-zoom title="Zoom">⤢</button>
         <a class="buy" data-ext href="${tcgUrl(c)}" target="_blank" rel="noopener" title="Find on TCGplayer">$</a>
+        ${deltaBadge(c)}
       </div>
       <div class="card-meta">
         <span class="cn">${esc(c.name)}</span>
@@ -176,6 +231,7 @@ function wireControls(col) {
     b.onclick = () => { filters.show = b.dataset.show; document.querySelectorAll('[data-show]').forEach(x => x.classList.toggle('active', x === b)); renderGrid(col); }; });
   const sort = document.getElementById('sort'); sort.value = filters.sort;
   sort.onchange = () => { filters.sort = sort.value; renderGrid(col); };
+  const rar = document.getElementById('rarity'); if (rar) { rar.value = filters.rarity; rar.onchange = () => { filters.rarity = rar.value; renderGrid(col); }; }
   const reset = document.getElementById('reset');
   reset.onclick = () => { if (confirm(`Clear your ${col.name} checkmarks?`)) { col.cards.forEach(c => owned.delete(k(col.id, c.id))); saveOwned(); renderStats(col); renderGrid(col); } };
 }
@@ -228,7 +284,7 @@ function openLightbox(col, c) {
     <div class="lb-card" data-holo><div class="holo-sheen"></div>${art}</div>
     <div class="lb-info">
       <h3>${esc(c.name)}</h3><div class="v">${esc(c.variant)}</div>
-      <div class="price">${esc(c.priceText)}</div>
+      <div class="price">${esc(c.priceText)} ${deltaBadge(c, true)}</div>
       <dl>
         <dt>Set</dt><dd>${esc(c.set)}</dd>
         <dt>Number</dt><dd>${esc(c.number)}</dd>

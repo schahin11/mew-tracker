@@ -241,6 +241,14 @@ select.sort {
 .card:hover .buy { opacity: 1; }
 .buy:hover { color: var(--gold); border-color: var(--gold); }
 
+.delta {
+  position: absolute; left: 8px; bottom: 8px; z-index: 5; font-size: 10.5px; font-weight: 800;
+  padding: 2px 7px; border-radius: 999px; letter-spacing: .01em; backdrop-filter: blur(6px); line-height: 1.3;
+}
+.delta.up   { background: rgba(60,200,140,.22); color: #74e6ad; border: 1px solid rgba(60,200,140,.45); }
+.delta.down { background: rgba(255,90,110,.20); color: #ff97a6; border: 1px solid rgba(255,90,110,.45); }
+.delta.inline { position: static; display: inline-block; vertical-align: middle; margin-left: 8px; backdrop-filter: none; }
+
 .card-meta { padding: 9px 2px 0; }
 .card-meta .cn { display: block; font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
 .card-meta .cs { display: block; font-size: 11px; color: var(--muted); margin-top: 1px;
@@ -287,6 +295,7 @@ select.sort {
 
 footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 40px; line-height: 1.7; }
 footer .reset { color: var(--accent); cursor: pointer; text-decoration: underline; }
+footer .lk { color: var(--accent2); cursor: pointer; text-decoration: underline; }
 
 /* ---- mobile ---- */
 @media (max-width: 560px) {
