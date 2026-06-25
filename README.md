@@ -1,44 +1,60 @@
-# Mew Master Set — Collection Tracker
+# The Vault — Pokémon TCG Collection
 
-A pretty, minimalist web app for tracking the complete **English Pokémon TCG Mew master set**.
-Check off cards as you get them; progress + value totals update live and save in your browser.
+A personal, multi-collection Pokémon TCG tracker. Dark "vault" UI, a live 3D background
+(Three.js), and interactive **holographic cards** that tilt and shine under the cursor.
+Check off cards as you get them — progress + value totals update live and save in your browser.
 
-Pure static site — **no build step, no dependencies.** Just HTML + CSS + JS.
+Pure static site — **no build step.** HTML + CSS + vanilla JS.
 
 ## Files
 | File | What it is |
 |------|-----------|
-| `index.html` | the page |
-| `styles.css` | the Mew-pink theme |
-| `app.js` | logic (checkmarks, filters, totals — saved via `localStorage`) |
-| `cards.js` | **the card list — edit this to add cards** |
+| `index.html` | shell (loads everything) |
+| `styles.css` | the premium theme |
+| `hero.js` | the 3D animated background (Three.js via CDN) |
+| `app.js` | logic — routing, dashboard, collection view, holo, lightbox |
+| `collections.js` | **the registry — defines each collection (tab)** |
+| `cards.js` | the Mew card data (used by the Mew collection) |
+| `img/` | locally-hosted card art for cards not in the public API |
 
-## Adding a card
-Open `cards.js`, copy any line, and edit it. Give it a **unique `id`**. That's it — refresh and it appears, auto-sorted by price.
+## Adding a new collection (a new tab)
+1. Make a data file, e.g. `collections/charizard.js`:
+   ```js
+   window.TCG_COLLECTIONS.push({
+     id: 'charizard',
+     name: 'Charizard',
+     tagline: 'The big lizard, every printing',
+     accent: '#ff7a45', accent2: '#ffd166',
+     cards: [
+       { id:'base-charizard-4', name:'Charizard', variant:'Holo', set:'Base Set',
+         number:'4/102', year:1999, rarity:'Holo Rare', tier:3,
+         price:300, priceText:'~$300', confidence:'High',
+         img:'https://images.pokemontcg.io/base1/4_hires.png' },
+       // …
+     ],
+   });
+   ```
+2. Add a `<script src="collections/charizard.js"></script>` in `index.html`
+   (right after `collections.js`, before `app.js`).
 
-```js
-{ id:'my-new-card', name:'Mew ex', variant:'Some Variant', set:'Some Set',
-  number:'123/456', year:2026, rarity:'Ultra Rare', tier:2,
-  price:42, priceText:'~$42', confidence:'High',
-  img:'https://images.pokemontcg.io/<setId>/<number>_hires.png' },
-```
+A new tile appears on the home screen automatically.
+
 `tier`: 1 = Bulk (<$50) · 2 = Mid ($50–300) · 3 = Grail ($300+)
 
-**Finding the right image:** official card art comes from the [Pokémon TCG API](https://pokemontcg.io). The URL pattern is
-`https://images.pokemontcg.io/<setId>/<number>_hires.png` — e.g. `sv3pt5/151_hires.png`.
-Look up a card's `setId` + `number` at `https://api.pokemontcg.io/v2/cards?q=name:Mew`.
-If a card isn't in the API (a few promos/jumbos aren't), leave `img:''` and it shows a Poké Ball placeholder.
+**Card art:** official images come from the [Pokémon TCG API](https://pokemontcg.io):
+`https://images.pokemontcg.io/<setId>/<number>_hires.png`. Look up setId + number at
+`https://api.pokemontcg.io/v2/cards?q=name:<Pokemon>`. If a card isn't in the API, drop the
+image in `img/` and point `img:'img/your-file.jpg'` (or leave `''` for a placeholder).
 
 ## Run locally
-Open `index.html` in a browser, or:
+Open `index.html`, or `npx serve .`
+
+## Deploy
 ```bash
-npx serve .
+git add -A && git commit -m "update" && git push   # auto-deploys once GitHub is linked in Vercel
+# or, manual:
+npx vercel deploy --prod --yes
 ```
 
-## Deploy to Vercel
-```bash
-npx vercel --prod
-```
-(or push to GitHub and import the repo at vercel.com — it auto-detects a static site, zero config.)
-
-> Note: checkmarks live in the browser's `localStorage`, so they're per-device. Same URL on the same browser keeps your progress.
+> Checkmarks live in the browser's `localStorage` (per device). Old single-Mew progress is
+> migrated automatically into the Mew collection.
