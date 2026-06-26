@@ -74,6 +74,17 @@ body {
 .agg .pill span { font-size: 12px; color: var(--muted); letter-spacing: .02em; }
 .agg .pill .gold { color: var(--gold-2); }
 
+/* quick actions (scan / my collection) */
+.actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 22px; }
+.action {
+  display: inline-flex; align-items: center; gap: 8px; padding: 13px 22px; border-radius: 14px;
+  font-size: 14.5px; font-weight: 600; text-decoration: none; cursor: pointer;
+  border: 1px solid var(--border-2); background: var(--panel-2); color: var(--text);
+  backdrop-filter: blur(14px); box-shadow: var(--shadow); transition: transform .15s ease, box-shadow .15s ease;
+}
+.action:hover { transform: translateY(-2px); box-shadow: var(--shadow-h); }
+.action.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #160f1c; border-color: transparent; }
+
 /* ============================================================
    SECTION HEADING
    ============================================================ */
@@ -292,6 +303,39 @@ select.sort {
 .lb-buy-btn.tcg  { background: rgba(70,130,255,.16); color: #b9d0ff; border-color: rgba(120,160,255,.35); }
 .lb-buy-btn.ebay { background: rgba(255,210,120,.12); color: var(--gold-2); border-color: rgba(236,196,106,.3); }
 .lb-buy-btn:hover { filter: brightness(1.15); transform: translateY(-1px); }
+
+/* ============================================================
+   SCANNER
+   ============================================================ */
+.scan {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: start center; padding: 20px;
+  background: rgba(5,4,10,.86); backdrop-filter: blur(14px); opacity: 0; transition: opacity .2s ease; overflow-y: auto;
+}
+.scan.show { opacity: 1; }
+.scan[hidden] { display: none; }
+.scan-inner { width: 100%; max-width: 420px; margin-top: 8px; }
+.scan-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.scan-top span { font-family: "Space Grotesk", sans-serif; font-weight: 700; font-size: 18px; }
+.scan-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 15px; }
+.scan-stage { position: relative; aspect-ratio: 3/4; border-radius: 16px; overflow: hidden; background: #000; border: 1px solid var(--border-2); }
+.scan-stage video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.scan-frame { position: absolute; inset: 12% 14%; border: 2px dashed rgba(255,255,255,.6); border-radius: 12px; pointer-events: none; box-shadow: 0 0 0 100vmax rgba(0,0,0,.25); }
+.scan-status { text-align: center; color: var(--muted); font-size: 13.5px; margin: 14px 0; min-height: 19px; }
+.scan-btn { width: 100%; padding: 14px; border-radius: 13px; border: 1px solid var(--border-2); background: var(--panel-2); color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; }
+.scan-btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #160f1c; border-color: transparent; }
+.scan-manual { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+.scan-manual input { display: block; width: 100%; margin-top: 8px; padding: 11px 14px; border-radius: 11px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 14px; outline: none; }
+.scan-card { display: flex; gap: 16px; margin-top: 20px; padding: 16px; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--border-2); }
+.scan-thumb { flex: 0 0 88px; width: 88px; aspect-ratio: 5/7; border-radius: 9px; overflow: hidden; background: #14111d; }
+.scan-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.scan-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.scan-info strong { font-size: 16px; }
+.scan-info .sm { color: var(--muted); font-size: 12.5px; }
+.scan-price { font-family: "Space Grotesk", sans-serif; font-size: 17px; font-weight: 700; color: var(--gold-2); margin: 2px 0 8px; }
+.scan-price small { color: var(--muted); font-weight: 400; font-size: 11px; font-family: "Inter"; }
+.scan-add { margin-top: auto; padding: 10px 14px; border-radius: 11px; cursor: pointer; font-weight: 700; font-size: 13.5px;
+  border: 1px solid var(--accent); background: transparent; color: var(--text); }
+.scan-add.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #160f1c; border-color: transparent; }
 
 footer { text-align: center; color: var(--muted); font-size: 12.5px; margin-top: 40px; line-height: 1.7; }
 footer .reset { color: var(--accent); cursor: pointer; text-decoration: underline; }

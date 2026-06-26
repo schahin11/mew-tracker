@@ -9,6 +9,7 @@ const OWNED_KEY = 'tcg-owned-v1';
 let owned = loadOwned();
 migrateOld();
 let filters = { q: '', tier: 'all', show: 'all', sort: 'asc', rarity: 'all' };
+let currentView = 'home';
 
 /* ---------- storage ---------- */
 function loadOwned() { try { return new Set(JSON.parse(localStorage.getItem(OWNED_KEY) || '[]')); } catch { return new Set(); } }
@@ -77,9 +78,14 @@ function ring(pct, accent) {
 
 /* ---------- routing ---------- */
 function render() {
-  const m = location.hash.match(/#\/c\/(.+)/);
-  const col = m && COLS.find(c => c.id === decodeURIComponent(m[1]));
-  if (col) renderCollection(col); else renderHome();
+  const h = location.hash;
+  if (h === '#/owned') {
+    renderOwned();
+  } else {
+    const m = h.match(/#\/c\/(.+)/);
+    const col = m && COLS.find(c => c.id === decodeURIComponent(m[1]));
+    if (col) renderCollection(col); else renderHome();
+  }
   bindHolo();
   window.scrollTo(0, 0);
 }
@@ -87,6 +93,7 @@ addEventListener('hashchange', render);
 
 /* ---------- home ---------- */
 function renderHome() {
+  currentView = 'home';
   let gT = 0, gO = 0, gOV = 0, gTV = 0;
   COLS.forEach(c => { const s = stats(c); gT += s.total; gO += s.owned; gOV += s.ownedVal; gTV += s.totalVal; });
 
@@ -113,6 +120,10 @@ function renderHome() {
         <div class="pill"><b class="gold">${money(gOV)}</b><span>value owned</span></div>
         <div class="pill"><b>${money(gTV)}</b><span>collection value</span></div>
       </div>
+      <div class="actions">
+        <button class="action primary" id="scanBtn">📷 Scan a card</button>
+        <a class="action" href="#/owned">🗂 My Collection · ${gO}</a>
+      </div>
     </header>
     <div class="sec-head"><h2>Collections</h2><span class="hint">${COLS.length} active</span></div>
     <div class="tiles">
@@ -133,12 +144,14 @@ function renderHome() {
   const exp = document.getElementById('export'), imp = document.getElementById('import'), impf = document.getElementById('importfile');
   if (exp) exp.onclick = exportOwned;
   if (imp && impf) { imp.onclick = () => impf.click(); impf.onchange = () => { if (impf.files[0]) importOwned(impf.files[0]); }; }
+  const sb = document.getElementById('scanBtn'); if (sb) sb.onclick = openScanner;
 }
 
 /* ---------- collection ---------- */
 let activeCol = null;
 function renderCollection(col) {
   activeCol = col;
+  currentView = 'collection';
   filters.rarity = 'all';
   const rarities = [...new Set(col.cards.map(c => c.rarity).filter(Boolean))].sort();
   const rarityOpts = ['all', ...rarities].map(r => `<option value="${esc(r)}">${r === 'all' ? 'All rarities' : esc(r)}</option>`).join('');
@@ -190,6 +203,66 @@ function passes(col, c) {
   return true;
 }
 
+function cardTile(col, c) {
+  const on = owned.has(k(col.id, c.id));
+  const art = c.img
+    ? `<img loading="lazy" src="${c.img}" alt="${esc(c.name)}" onerror="this.outerHTML='<div class=&quot;noimg&quot;></div>'">`
+    : `<div class="noimg"></div>`;
+  return `<div class="card ${on ? 'owned' : ''}" data-id="${c.id}" data-col="${col.id}">
+    <div class="art" data-holo><div class="holo-sheen"></div>${art}
+      <span class="check">✓</span>
+      <button class="zoom" data-zoom title="Zoom">⤢</button>
+      <a class="buy" data-ext href="${tcgUrl(c)}" target="_blank" rel="noopener" title="Find on TCGplayer">$</a>
+      ${deltaBadge(c)}
+    </div>
+    <div class="card-meta">
+      <span class="cn">${esc(c.name)}</span>
+      <span class="cs">${esc(c.set)} · ${esc(c.number)}</span>
+      <span><span class="tier-dot t${c.tier}"></span><span class="cp">${esc(c.priceText)}</span></span>
+    </div>
+  </div>`;
+}
+
+/* ---------- My Collection (everything owned, across sets) ---------- */
+function renderOwned() {
+  currentView = 'owned';
+  document.getElementById('app').innerHTML = `<div class="wrap" style="--accent:#ecc46a;--accent2:#ff8fb8">
+    <div class="cv-head">
+      <a class="back" href="#/" title="Back">←</a>
+      <div><h1 class="cv-title">My Collection<span class="dot">.</span></h1><p class="cv-sub">Every card you own, across all sets</p></div>
+    </div>
+    <section class="stats">
+      <div class="stat-row"><div class="count" id="owncount"></div><div class="value" id="ownvalue"></div></div>
+    </section>
+    <div class="controls">
+      <input id="search" class="search" type="search" placeholder="Search your cards…" autocomplete="off">
+      <select id="sort" class="sort"><option value="desc">$ high → low</option><option value="asc">$ low → high</option></select>
+    </div>
+    <div id="grid" class="grid"></div>
+    <footer>Tap a card to remove it · tap <b>⤢</b> to zoom.</footer>
+  </div>`;
+  const search = document.getElementById('search'); search.value = filters.q;
+  search.oninput = () => { filters.q = search.value; paintOwned(); };
+  const sort = document.getElementById('sort'); sort.value = filters.sort === 'asc' ? 'asc' : 'desc';
+  sort.onchange = () => { filters.sort = sort.value; paintOwned(); };
+  paintOwned();
+}
+function paintOwned() {
+  const items = [];
+  COLS.forEach(col => col.cards.forEach(c => { if (owned.has(k(col.id, c.id))) items.push({ col, c }); }));
+  const totalVal = items.reduce((s, x) => s + x.c.price, 0);
+  document.getElementById('owncount').innerHTML = `${items.length}<small> cards owned</small>`;
+  document.getElementById('ownvalue').innerHTML = `<span class="big">${money(totalVal)}</span><small>total value</small>`;
+  let rows = items;
+  if (filters.q) rows = rows.filter(({ c }) => `${c.name} ${c.set} ${c.number} ${c.year} ${c.rarity}`.toLowerCase().includes(filters.q.toLowerCase()));
+  rows.sort((a, b) => filters.sort === 'asc' ? a.c.price - b.c.price : b.c.price - a.c.price);
+  const grid = document.getElementById('grid');
+  grid.innerHTML = rows.length
+    ? rows.map(({ col, c }) => cardTile(col, c)).join('')
+    : `<div class="empty">No cards yet — scan a card or tap cards inside a collection to add them.</div>`;
+  bindHolo();
+}
+
 function renderGrid(col) {
   const numOf = c => { const n = String(c.number).split('/')[0]; return /^\d+$/.test(n) ? +n : 99999; };
   const s = filters.sort;
@@ -200,25 +273,7 @@ function renderGrid(col) {
   });
   const grid = document.getElementById('grid');
   if (!rows.length) { grid.innerHTML = `<div class="empty">No cards match that filter.</div>`; return; }
-  grid.innerHTML = rows.map(c => {
-    const on = owned.has(k(col.id, c.id));
-    const art = c.img
-      ? `<img loading="lazy" src="${c.img}" alt="${esc(c.name)}" onerror="this.outerHTML='<div class=&quot;noimg&quot;></div>'">`
-      : `<div class="noimg"></div>`;
-    return `<div class="card ${on ? 'owned' : ''}" data-id="${c.id}">
-      <div class="art" data-holo><div class="holo-sheen"></div>${art}
-        <span class="check">✓</span>
-        <button class="zoom" data-zoom title="Zoom">⤢</button>
-        <a class="buy" data-ext href="${tcgUrl(c)}" target="_blank" rel="noopener" title="Find on TCGplayer">$</a>
-        ${deltaBadge(c)}
-      </div>
-      <div class="card-meta">
-        <span class="cn">${esc(c.name)}</span>
-        <span class="cs">${esc(c.set)} · ${esc(c.number)}</span>
-        <span><span class="tier-dot t${c.tier}"></span><span class="cp">${esc(c.priceText)}</span></span>
-      </div>
-    </div>`;
-  }).join('');
+  grid.innerHTML = rows.map(c => cardTile(col, c)).join('');
   bindHolo();
 }
 
@@ -242,16 +297,17 @@ document.getElementById('app').addEventListener('click', e => {
   if (e.target.closest('[data-ext]')) return;          // let buy links open in new tab
   const zoom = e.target.closest('[data-zoom]');
   const card = e.target.closest('.card');
-  if (!card || !activeCol) return;
-  const c = activeCol.cards.find(x => x.id === card.dataset.id);
-  if (!c) return;
-  if (zoom) { openLightbox(activeCol, c); return; }
-  const key = k(activeCol.id, c.id);
+  if (!card) return;
+  const col = COLS.find(x => x.id === card.dataset.col);
+  const c = col && col.cards.find(x => x.id === card.dataset.id);
+  if (!col || !c) return;
+  if (zoom) { openLightbox(col, c); return; }
+  const key = k(col.id, c.id);
   owned.has(key) ? owned.delete(key) : owned.add(key);
   saveOwned();
   card.classList.toggle('owned', owned.has(key));
-  renderStats(activeCol);
-  if (filters.show !== 'all') renderGrid(activeCol);
+  if (currentView === 'owned') { renderOwned(); }
+  else { renderStats(col); if (filters.show !== 'all') renderGrid(col); }
 });
 
 /* ---------- holographic tilt ---------- */
@@ -326,6 +382,107 @@ function closeLightbox() {
   const lb = document.getElementById('lightbox');
   lb.classList.remove('show');
   setTimeout(() => { lb.hidden = true; lb.innerHTML = ''; }, 200);
+}
+
+/* ---------- scanner (camera + on-device OCR) ---------- */
+let scanStream = null, _tess = null;
+
+function loadTesseract() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (_tess) return _tess;
+  _tess = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+    s.onload = () => res(window.Tesseract); s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  return _tess;
+}
+
+async function openScanner() {
+  const el = document.getElementById('scanner');
+  el.hidden = false; requestAnimationFrame(() => el.classList.add('show'));
+  el.innerHTML = `<div class="scan-inner">
+    <div class="scan-top"><span>Scan a card</span><button class="scan-x" id="scanclose">✕</button></div>
+    <div class="scan-stage"><video id="scanvid" autoplay playsinline muted></video><div class="scan-frame"></div></div>
+    <div class="scan-status" id="scanstatus">Fill the frame with one card, then capture.</div>
+    <button class="scan-btn primary" id="scancap">Capture &amp; identify</button>
+    <div class="scan-manual">…or type a card name / number <input id="scanmanual" placeholder="e.g. Mega Gengar 284  ·  Mew ex 232"></div>
+    <div id="scanresult"></div>
+  </div>`;
+  document.getElementById('scanclose').onclick = closeScanner;
+  document.getElementById('scancap').onclick = captureAndIdentify;
+  const mi = document.getElementById('scanmanual');
+  mi.onkeydown = e => { if (e.key === 'Enter' && mi.value.trim()) identifyFromText(mi.value); };
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    document.getElementById('scanvid').srcObject = scanStream;
+  } catch {
+    document.getElementById('scanstatus').textContent = 'Camera not available — type a name or number below instead.';
+  }
+}
+function closeScanner() {
+  const el = document.getElementById('scanner');
+  el.classList.remove('show');
+  if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  setTimeout(() => { el.hidden = true; el.innerHTML = ''; }, 200);
+}
+async function captureAndIdentify() {
+  const vid = document.getElementById('scanvid'), status = document.getElementById('scanstatus');
+  if (!vid || !vid.videoWidth) { status.textContent = 'Camera not ready yet — give it a second.'; return; }
+  status.textContent = 'Reading the card…';
+  const canvas = document.createElement('canvas');
+  canvas.width = vid.videoWidth; canvas.height = vid.videoHeight;
+  canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
+  try {
+    const T = await loadTesseract();
+    const { data } = await T.recognize(canvas, 'eng');
+    identifyFromText(data.text);
+  } catch {
+    status.textContent = 'Could not read it. Try brighter light and fill the frame, or type it below.';
+  }
+}
+function matchCard(text) {
+  const T = (text || '').toUpperCase();
+  const nums = new Set();
+  (T.match(/\b[A-Z]{0,4}\s?\d{1,3}\s*\/\s*\d{1,3}\b/g) || []).forEach(m => nums.add(m.replace(/\s/g, '')));
+  (T.match(/\b(?:SVP?|XY|SM|BW|GG|TG|HGSS|DP|RC)\d{1,3}\b/g) || []).forEach(m => nums.add(m));
+  (T.match(/\b\d{1,3}\b/g) || []).forEach(m => nums.add(m));
+  let best = null;
+  COLS.forEach(col => col.cards.forEach(c => {
+    const full = String(c.number).replace(/\s/g, '').toUpperCase();
+    const lead = full.split('/')[0];
+    let score = 0;
+    if (nums.has(full)) score += 120;
+    else if (nums.has(lead)) score += (lead.length >= 2 ? 70 : 32);
+    c.name.toUpperCase().split(/[^A-Z]+/).filter(w => w.length >= 3).forEach(w => { if (T.includes(w)) score += 12; });
+    String(c.set).toUpperCase().split(/[^A-Z0-9]+/).filter(w => w.length >= 3).forEach(w => { if (T.includes(w)) score += 4; });
+    if (score > 0 && (!best || score > best.score)) best = { col, card: c, score };
+  }));
+  return (best && best.score >= 30) ? best : null;
+}
+function identifyFromText(text) {
+  const status = document.getElementById('scanstatus');
+  const m = matchCard(text);
+  if (!m) { status.textContent = 'No match in your loaded collections. Try again, or add that set first.'; return; }
+  status.textContent = 'Match found:';
+  showScanResult(m.col, m.card);
+}
+function showScanResult(col, c) {
+  const on = owned.has(k(col.id, c.id));
+  const art = c.img ? `<img src="${c.img}" alt="">` : `<div class="noimg" style="height:100%"></div>`;
+  document.getElementById('scanresult').innerHTML = `<div class="scan-card" style="--accent:${col.accent}">
+    <div class="scan-thumb">${art}</div>
+    <div class="scan-info">
+      <strong>${esc(c.name)}</strong>
+      <span class="sm">${esc(c.set)} · ${esc(c.number)}</span>
+      <span class="scan-price">${esc(c.priceText)} ${deltaBadge(c, true)}<small> raw market</small></span>
+      <button class="scan-add ${on ? 'on' : ''}" id="scanadd">${on ? `✓ Already in ${esc(col.name)}` : `+ Add to ${esc(col.name)}`}</button>
+    </div></div>`;
+  document.getElementById('scanadd').onclick = () => {
+    owned.add(k(col.id, c.id)); saveOwned();
+    const b = document.getElementById('scanadd'); b.classList.add('on'); b.textContent = `✓ Added to ${col.name}`;
+  };
 }
 
 /* ---------- go ---------- */

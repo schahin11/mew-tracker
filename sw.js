@@ -3,7 +3,7 @@
    - same-origin app files  -> network-first (so deploys always update), cache fallback offline
    - images + CDN libs (3D)  -> cache-first (immutable; makes viewed cards work offline)
    Bump VERSION to force a refresh of the cached app shell. */
-const VERSION = 'vault-v1';
+const VERSION = 'vault-v2';
 const RT = VERSION + '-runtime';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/hero.js',
@@ -29,7 +29,7 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   const isImage = req.destination === 'image' || /\.(png|jpe?g|webp|svg|gif)$/i.test(url.pathname);
-  const isCdnLib = url.hostname === 'unpkg.com';
+  const isCdnLib = url.hostname === 'unpkg.com' || url.hostname === 'cdn.jsdelivr.net';
 
   if (isImage || isCdnLib) {
     // cache-first
