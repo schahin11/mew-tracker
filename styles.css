@@ -333,6 +333,7 @@ select.sort {
 .scan-info .sm { color: var(--muted); font-size: 12.5px; }
 .scan-price { font-family: "Space Grotesk", sans-serif; font-size: 17px; font-weight: 700; color: var(--gold-2); margin: 2px 0 8px; }
 .scan-price small { color: var(--muted); font-weight: 400; font-size: 11px; font-family: "Inter"; }
+.scan-price .live { color: #74e6ad; font-weight: 600; }
 .scan-add { margin-top: auto; padding: 10px 14px; border-radius: 11px; cursor: pointer; font-weight: 700; font-size: 13.5px;
   border: 1px solid var(--accent); background: transparent; color: var(--text); }
 .scan-add.on { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #160f1c; border-color: transparent; }

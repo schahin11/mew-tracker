@@ -3,11 +3,11 @@
    - same-origin app files  -> network-first (so deploys always update), cache fallback offline
    - images + CDN libs (3D)  -> cache-first (immutable; makes viewed cards work offline)
    Bump VERSION to force a refresh of the cached app shell. */
-const VERSION = 'vault-v2';
+const VERSION = 'vault-v3';
 const RT = VERSION + '-runtime';
 const SHELL = [
   '/', '/index.html', '/styles.css', '/app.js', '/hero.js',
-  '/cards.js', '/collections.js', '/collections/ascended-heroes.js', '/deltas.js',
+  '/cards.js', '/collections.js', '/collections/ascended-heroes.js', '/deltas.js', '/tcgdex-map.js',
   '/manifest.json', '/icons/icon-192.png', '/icons/icon-512.png',
 ];
 

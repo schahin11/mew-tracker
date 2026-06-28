@@ -468,21 +468,49 @@ function identifyFromText(text) {
   status.textContent = 'Match found:';
   showScanResult(m.col, m.card);
 }
+let scanToken = 0;
+async function livePrice(card) {
+  const id = (window.TCG_TDX || {})[card.id];
+  if (!id) return null;
+  try {
+    const r = await fetch(`https://api.tcgdex.net/v2/en/cards/${id}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const tp = (d.pricing && d.pricing.tcgplayer) || {};
+    for (const key of ['holofoil', 'normal', 'reverse-holofoil', 'reverseHolofoil']) {
+      const v = tp[key]; if (v && v.marketPrice) return +v.marketPrice;
+    }
+    for (const v of Object.values(tp)) { if (v && v.marketPrice) return +v.marketPrice; }
+    const cm = (d.pricing && d.pricing.cardmarket) || {};
+    if (cm.trend) return +(cm.trend * 1.08).toFixed(2);
+  } catch {}
+  return null;
+}
 function showScanResult(col, c) {
   const on = owned.has(k(col.id, c.id));
   const art = c.img ? `<img src="${c.img}" alt="">` : `<div class="noimg" style="height:100%"></div>`;
+  const hasLive = !!(window.TCG_TDX || {})[c.id];
   document.getElementById('scanresult').innerHTML = `<div class="scan-card" style="--accent:${col.accent}">
     <div class="scan-thumb">${art}</div>
     <div class="scan-info">
       <strong>${esc(c.name)}</strong>
       <span class="sm">${esc(c.set)} · ${esc(c.number)}</span>
-      <span class="scan-price">${esc(c.priceText)} ${deltaBadge(c, true)}<small> raw market</small></span>
+      <span class="scan-price" id="scanprice">${esc(c.priceText)} ${deltaBadge(c, true)}<small> ${hasLive ? '· refreshing…' : 'tracked'}</small></span>
       <button class="scan-add ${on ? 'on' : ''}" id="scanadd">${on ? `✓ Already in ${esc(col.name)}` : `+ Add to ${esc(col.name)}`}</button>
     </div></div>`;
   document.getElementById('scanadd').onclick = () => {
     owned.add(k(col.id, c.id)); saveOwned();
     const b = document.getElementById('scanadd'); b.classList.add('on'); b.textContent = `✓ Added to ${col.name}`;
   };
+  const token = ++scanToken;
+  if (hasLive) livePrice(c).then(p => {
+    if (token !== scanToken) return;                 // a newer scan superseded this
+    const el = document.getElementById('scanprice');
+    if (!el) return;
+    if (p == null) { el.innerHTML = `${esc(c.priceText)} <small>tracked</small>`; return; }
+    const fmt = '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    el.innerHTML = `${fmt} <small class="live" title="Tracked: ${esc(c.priceText)}">● live</small>`;
+  });
 }
 
 /* ---------- go ---------- */
