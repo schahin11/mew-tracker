@@ -10,6 +10,7 @@ let owned = loadOwned();
 migrateOld();
 let filters = { q: '', tier: 'all', show: 'all', sort: 'asc', rarity: 'all' };
 let currentView = 'home';
+let lbToken = 0;
 
 /* ---------- storage ---------- */
 function loadOwned() { try { return new Set(JSON.parse(localStorage.getItem(OWNED_KEY) || '[]')); } catch { return new Set(); } }
@@ -340,7 +341,7 @@ function openLightbox(col, c) {
     <div class="lb-card" data-holo><div class="holo-sheen"></div>${art}</div>
     <div class="lb-info">
       <h3>${esc(c.name)}</h3><div class="v">${esc(c.variant)}</div>
-      <div class="price">${esc(c.priceText)} ${deltaBadge(c, true)}</div>
+      <div class="price" id="lbprice">${esc(c.priceText)} ${deltaBadge(c, true)}${(window.TCG_TDX || {})[c.id] ? '<small class="lbwait"> · refreshing…</small>' : ''}</div>
       <dl>
         <dt>Set</dt><dd>${esc(c.set)}</dd>
         <dt>Number</dt><dd>${esc(c.number)}</dd>
@@ -372,6 +373,15 @@ function openLightbox(col, c) {
     if (card) card.classList.toggle('owned', now);
     if (activeCol) { renderStats(activeCol); if (filters.show !== 'all') renderGrid(activeCol); }
   };
+
+  const lt = ++lbToken;
+  if ((window.TCG_TDX || {})[c.id]) livePrice(c).then(p => {
+    if (lt !== lbToken) return;
+    const pe = document.getElementById('lbprice'); if (!pe) return;
+    if (p == null) { pe.innerHTML = `${esc(c.priceText)} ${deltaBadge(c, true)}`; return; }
+    const fmt = '$' + p.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    pe.innerHTML = `${fmt} ${deltaBadge(c, true)} <small class="live" title="Tracked: ${esc(c.priceText)}">● live</small>`;
+  });
 }
 document.getElementById('lightbox').addEventListener('click', e => {
   if (e.target.closest('.lb-info') || e.target.closest('.lb-card')) return;
@@ -384,8 +394,22 @@ function closeLightbox() {
   setTimeout(() => { lb.hidden = true; lb.innerHTML = ''; }, 200);
 }
 
-/* ---------- scanner (camera + on-device OCR) ---------- */
-let scanStream = null, _tess = null;
+/* ---------- scanner (camera + on-device OCR, auto-detect) ---------- */
+let scanStream = null, _tess = null, _worker = null, autoScan = false;
+const AUTO_THRESHOLD = 85;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function makeFrame(vid) {
+  const cv = document.createElement('canvas');
+  cv.width = vid.videoWidth; cv.height = vid.videoHeight;
+  cv.getContext('2d').drawImage(vid, 0, 0, cv.width, cv.height);
+  return cv;
+}
+async function getWorker() {
+  if (_worker) return _worker;
+  const T = await loadTesseract();
+  _worker = await T.createWorker('eng');
+  return _worker;
+}
 
 function loadTesseract() {
   if (window.Tesseract) return Promise.resolve(window.Tesseract);
@@ -405,42 +429,65 @@ async function openScanner() {
   el.innerHTML = `<div class="scan-inner">
     <div class="scan-top"><span>Scan a card</span><button class="scan-x" id="scanclose">✕</button></div>
     <div class="scan-stage"><video id="scanvid" autoplay playsinline muted></video><div class="scan-frame"></div></div>
-    <div class="scan-status" id="scanstatus">Fill the frame with one card, then capture.</div>
-    <button class="scan-btn primary" id="scancap">Capture &amp; identify</button>
+    <div class="scan-status" id="scanstatus">Starting camera…</div>
+    <button class="scan-btn primary" id="scanagain" hidden>↻ Scan another card</button>
     <div class="scan-manual">…or type a card name / number <input id="scanmanual" placeholder="e.g. Mega Gengar 284  ·  Mew ex 232"></div>
     <div id="scanresult"></div>
   </div>`;
   document.getElementById('scanclose').onclick = closeScanner;
-  document.getElementById('scancap').onclick = captureAndIdentify;
+  document.getElementById('scanagain').onclick = resumeScan;
   const mi = document.getElementById('scanmanual');
-  mi.onkeydown = e => { if (e.key === 'Enter' && mi.value.trim()) identifyFromText(mi.value); };
+  mi.onkeydown = e => { if (e.key === 'Enter' && mi.value.trim()) { autoScan = false; identifyFromText(mi.value); } };
   try {
     scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     document.getElementById('scanvid').srcObject = scanStream;
+    resumeScan();
   } catch {
     document.getElementById('scanstatus').textContent = 'Camera not available — type a name or number below instead.';
   }
 }
+function resumeScan() {
+  const ra = document.getElementById('scanagain'); if (ra) ra.hidden = true;
+  const res = document.getElementById('scanresult'); if (res) res.innerHTML = '';
+  autoScan = true;
+  autoLoop();
+}
+async function autoLoop() {
+  const stage = document.querySelector('.scan-stage'), status = document.getElementById('scanstatus');
+  if (status) status.textContent = 'Loading scanner…';
+  let worker;
+  try { worker = await getWorker(); }
+  catch { if (status) status.textContent = 'Scanner failed to load — type the card below.'; return; }
+  if (stage) stage.classList.add('scanning');
+  if (status) status.textContent = 'Scanning — hold a card steady in the frame…';
+  while (autoScan) {
+    const vid = document.getElementById('scanvid');
+    if (vid && vid.videoWidth) {
+      try {
+        const { data } = await worker.recognize(makeFrame(vid));
+        if (!autoScan) break;
+        const m = matchCard(data.text);
+        if (m && m.score >= AUTO_THRESHOLD) { onMatched(m.col, m.card); break; }
+      } catch {}
+    }
+    await sleep(800);
+  }
+  if (stage) stage.classList.remove('scanning');
+}
+function onMatched(col, card) {
+  autoScan = false;
+  const stage = document.querySelector('.scan-stage'); if (stage) stage.classList.remove('scanning');
+  const status = document.getElementById('scanstatus'); if (status) status.textContent = 'Match found:';
+  const ra = document.getElementById('scanagain'); if (ra) ra.hidden = false;
+  showScanResult(col, card);
+}
 function closeScanner() {
+  autoScan = false;
   const el = document.getElementById('scanner');
   el.classList.remove('show');
   if (scanStream) { scanStream.getTracks().forEach(t => t.stop()); scanStream = null; }
+  if (_worker) { try { _worker.terminate(); } catch {} _worker = null; }
   setTimeout(() => { el.hidden = true; el.innerHTML = ''; }, 200);
-}
-async function captureAndIdentify() {
-  const vid = document.getElementById('scanvid'), status = document.getElementById('scanstatus');
-  if (!vid || !vid.videoWidth) { status.textContent = 'Camera not ready yet — give it a second.'; return; }
-  status.textContent = 'Reading the card…';
-  const canvas = document.createElement('canvas');
-  canvas.width = vid.videoWidth; canvas.height = vid.videoHeight;
-  canvas.getContext('2d').drawImage(vid, 0, 0, canvas.width, canvas.height);
-  try {
-    const T = await loadTesseract();
-    const { data } = await T.recognize(canvas, 'eng');
-    identifyFromText(data.text);
-  } catch {
-    status.textContent = 'Could not read it. Try brighter light and fill the frame, or type it below.';
-  }
 }
 function matchCard(text) {
   const T = (text || '').toUpperCase();
@@ -464,9 +511,8 @@ function matchCard(text) {
 function identifyFromText(text) {
   const status = document.getElementById('scanstatus');
   const m = matchCard(text);
-  if (!m) { status.textContent = 'No match in your loaded collections. Try again, or add that set first.'; return; }
-  status.textContent = 'Match found:';
-  showScanResult(m.col, m.card);
+  if (!m) { if (status) status.textContent = 'No match in your loaded collections. Try again, or add that set first.'; return; }
+  onMatched(m.col, m.card);
 }
 let scanToken = 0;
 async function livePrice(card) {
