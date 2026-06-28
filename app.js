@@ -396,6 +396,7 @@ function closeLightbox() {
 
 /* ---------- scanner (camera + on-device OCR, auto-detect) ---------- */
 let scanStream = null, _tess = null, _worker = null, autoScan = false;
+let scanSession = [];
 const AUTO_THRESHOLD = 85;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function makeFrame(vid) {
@@ -426,18 +427,21 @@ function loadTesseract() {
 async function openScanner() {
   const el = document.getElementById('scanner');
   el.hidden = false; requestAnimationFrame(() => el.classList.add('show'));
+  scanSession = [];
   el.innerHTML = `<div class="scan-inner">
-    <div class="scan-top"><span>Scan a card</span><button class="scan-x" id="scanclose">✕</button></div>
+    <div class="scan-top"><div class="scan-title">Scan a card <span class="scan-count" id="scancount"></span></div><button class="scan-x" id="scanclose">✕</button></div>
     <div class="scan-stage"><video id="scanvid" autoplay playsinline muted></video><div class="scan-frame"></div></div>
     <div class="scan-status" id="scanstatus">Starting camera…</div>
     <button class="scan-btn primary" id="scanagain" hidden>↻ Scan another card</button>
     <div class="scan-manual">…or type a card name / number <input id="scanmanual" placeholder="e.g. Mega Gengar 284  ·  Mew ex 232"></div>
     <div id="scanresult"></div>
+    <div class="scan-session" id="scansession"></div>
   </div>`;
   document.getElementById('scanclose').onclick = closeScanner;
   document.getElementById('scanagain').onclick = resumeScan;
   const mi = document.getElementById('scanmanual');
   mi.onkeydown = e => { if (e.key === 'Enter' && mi.value.trim()) { autoScan = false; identifyFromText(mi.value); } };
+  renderScanCount();
   try {
     scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     document.getElementById('scanvid').srcObject = scanStream;
@@ -532,6 +536,20 @@ async function livePrice(card) {
   } catch {}
   return null;
 }
+function renderScanCount() {
+  const cEl = document.getElementById('scancount');
+  if (cEl) {
+    const val = scanSession.reduce((s, x) => s + x.card.price, 0);
+    cEl.textContent = scanSession.length ? `· ${scanSession.length} added · ${money(val)}` : '';
+  }
+  const sEl = document.getElementById('scansession');
+  if (sEl) {
+    sEl.innerHTML = scanSession.length
+      ? `<div class="ss-head">Added this session</div>` + scanSession.slice().reverse().map(({ card }) =>
+          `<div class="ss-row"><span class="ss-name">${esc(card.name)}</span><span class="ss-set">${esc(card.number)}</span><span class="ss-price">${esc(card.priceText)}</span></div>`).join('')
+      : '';
+  }
+}
 function showScanResult(col, c) {
   const on = owned.has(k(col.id, c.id));
   const art = c.img ? `<img src="${c.img}" alt="">` : `<div class="noimg" style="height:100%"></div>`;
@@ -547,6 +565,7 @@ function showScanResult(col, c) {
   document.getElementById('scanadd').onclick = () => {
     owned.add(k(col.id, c.id)); saveOwned();
     const b = document.getElementById('scanadd'); b.classList.add('on'); b.textContent = `✓ Added to ${col.name}`;
+    if (!scanSession.some(x => x.card.id === c.id && x.col.id === col.id)) { scanSession.push({ col, card: c }); renderScanCount(); }
   };
   const token = ++scanToken;
   if (hasLive) livePrice(c).then(p => {
